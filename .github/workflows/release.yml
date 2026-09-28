@@ -1,0 +1,66 @@
+name: Release
+
+# 打 v* 标签即自动编译 linux/amd64 发行包并创建 Release；
+# 也支持手动触发（只产出 Artifact，不建 Release，便于验证构建）。
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: 构建 Linux x86_64 发行包
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: src/font-subset/go.mod
+          cache-dependency-path: src/font-subset/go.sum
+
+      - name: 编译 font-subset
+        working-directory: src/font-subset
+        env:
+          CGO_ENABLED: '0'
+          GOOS: linux
+          GOARCH: amd64
+        run: |
+          mkdir -p ../../bin
+          go build -trimpath -ldflags="-s -w" -o ../../bin/font-subset .
+
+      - name: 组装发行包
+        run: |
+          set -euo pipefail
+          rm -rf dist/pkg
+          mkdir -p dist/pkg/app dist/pkg/bin dist/pkg/fonts dist/pkg/cache
+          cp index.php .htaccess README.md config.example.json dist/pkg/
+          cp app/*.php dist/pkg/app/
+          cp fonts/README.txt dist/pkg/fonts/
+          cp bin/font-subset dist/pkg/bin/
+          chmod 755 dist/pkg/bin/font-subset
+          # 包内不带顶层目录，解压到站点根目录即可直接使用；
+          # 不加 -X，以保留 bin/font-subset 的可执行位
+          (cd dist/pkg && zip -r ../font-subsetter.zip \
+            index.php .htaccess README.md config.example.json app bin fonts cache)
+          unzip -l dist/font-subsetter.zip
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: font-subsetter-linux-amd64
+          path: dist/font-subsetter.zip
+
+      - name: 创建 Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/font-subsetter.zip \
+            --title "$GITHUB_REF_NAME" --generate-notes

@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  php:
+    name: PHP 语法检查
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: php -l
+        run: |
+          set -euo pipefail
+          find . -name '*.php' -not -path './xlsx.imhcg.cn/*' -print0 \
+            | xargs -0 -n1 php -l
+
+  go:
+    name: Go 构建检查
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: src/font-subset/go.mod
+          cache-dependency-path: src/font-subset/go.sum
+
+      - name: go vet + build
+        working-directory: src/font-subset
+        env:
+          CGO_ENABLED: '0'
+        run: |
+          go vet ./...
+          go build -trimpath -ldflags="-s -w" -o /dev/null .

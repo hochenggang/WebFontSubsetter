@@ -1,0 +1,9 @@
+# 强制文本文件以 LF 入库，避免 Windows 上 CRLF 污染仓库、
+# 以及 build.sh / GitHub Actions 脚本在 Linux 上因 CRLF 无法执行。
+* text=auto eol=lf
+
+# 二进制文件不做换行与 diff 处理
+*.ttf  binary
+*.otf  binary
+*.woff2 binary
+*.exe  binary

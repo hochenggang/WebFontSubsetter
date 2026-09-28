@@ -1,0 +1,6 @@
+{
+    "timeoutSeconds": 30,
+    "fontScanCacheSeconds": 30,
+    "cfTurnstileSiteKey": "",
+    "cfTurnstileSecret": ""
+}

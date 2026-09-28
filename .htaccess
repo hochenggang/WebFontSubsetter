@@ -1,0 +1,22 @@
+# Web Font Subsetter —— 保护敏感文件与内部模块。
+#
+# app/ 下的 PHP 模块在入口被人为请求时也会因缺少 FONT_SUBSET_APP 常量而直接退出，
+# 所以即使主机未启用 mod_rewrite，本文件失效也不会造成代码泄漏。
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^(?:app|cache)/ - [F,L]
+    RewriteRule ^config\.json$ - [F,L]
+    # 如需禁止直接下载字体库，取消下一行注释
+    # RewriteRule ^fonts/ - [F,L]
+</IfModule>
+
+<FilesMatch "\.(json|lock|result|sh|go|mod|sum|md)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>

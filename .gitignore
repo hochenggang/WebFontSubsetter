@@ -1,2 +1,17 @@
-bin/
-fonts/
+# 构建产物
+/bin/
+/dist/
+
+# 字体库：体积大且与部署环境相关，由使用者自行放置，仅保留说明文件
+/fonts/*
+!/fonts/README.txt
+
+# 运行时缓存
+/cache/
+
+# 本地配置（含 Turnstile 私钥，绝不入库；用 config.example.json 作为模板）
+/config.json
+
+# 发行包与参考项目
+*.zip
+/xlsx.imhcg.cn/
