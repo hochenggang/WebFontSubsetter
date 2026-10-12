@@ -58,6 +58,32 @@ function renderUi(): void
         font: 12px/1.7 ui-monospace, Consolas, monospace;
         white-space: pre-wrap; word-break: break-all;
     }
+    /* Turnstile 组件固定高 65px；骨架同高占位，渲染完成前不产生布局跳动 */
+    .turnstile-slot { position: relative; min-height: 65px; }
+    .turnstile-skeleton {
+        position: absolute; inset: 0; overflow: hidden; pointer-events: none;
+        background: #eaecf0; border-radius: 8px;
+        transition: opacity .2s ease-out, visibility .2s;
+    }
+    .turnstile-skeleton::after {
+        content: ''; position: absolute; inset: 0;
+        transform: translateX(-100%);
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,.65), transparent);
+        animation: skeleton-sweep 1.5s linear infinite;
+    }
+    @keyframes skeleton-sweep { to { transform: translateX(100%); } }
+    .turnstile-slot.is-ready .turnstile-skeleton,
+    .turnstile-slot.is-failed .turnstile-skeleton { opacity: 0; visibility: hidden; }
+    .turnstile-fallback {
+        display: none; min-height: 65px;
+        align-items: center; justify-content: center;
+        border: 1px dashed #d0d7de; border-radius: 8px;
+        font-size: 13px; color: #8c959f;
+    }
+    .turnstile-slot.is-failed .turnstile-fallback { display: flex; }
+    @media (prefers-reduced-motion: reduce) {
+        .turnstile-skeleton::after { animation: none; }
+    }
 </style>
 </head>
 <body>
@@ -92,8 +118,12 @@ function renderUi(): void
 
         <?php if ($turnstile): ?>
         <label>真人验证</label>
-        <div class="cf-turnstile" data-sitekey="<?= htmlspecialchars(config()['cfTurnstileSiteKey'], ENT_QUOTES) ?>"
-             data-size="flexible" data-callback="onTurnstileDone"></div>
+        <div class="turnstile-slot" id="turnstile-slot">
+            <div class="turnstile-skeleton" aria-hidden="true"></div>
+            <div class="cf-turnstile" data-sitekey="<?= htmlspecialchars(config()['cfTurnstileSiteKey'], ENT_QUOTES) ?>"
+                 data-size="flexible" data-callback="onTurnstileDone"></div>
+            <div class="turnstile-fallback">验证组件加载失败，请刷新页面后重试</div>
+        </div>
         <?php endif; ?>
 
         <button id="submit" type="submit"<?= ($turnstile || $issues !== []) ? ' disabled' : '' ?>>获取字体</button>
@@ -103,8 +133,15 @@ function renderUi(): void
 </div>
 
 <?php if ($turnstile): ?>
-<script>window.onTurnstileDone = function () { document.getElementById('submit').disabled = false; };</script>
-<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+<script>
+window.onTurnstileDone = function () { document.getElementById('submit').disabled = false; };
+window.onTurnstileLoadError = function () {
+    const slot = document.getElementById('turnstile-slot');
+    if (slot) { slot.classList.add('is-failed'); }
+};
+</script>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer
+        onerror="window.onTurnstileLoadError && window.onTurnstileLoadError();"></script>
 <?php endif; ?>
 <script>
 const $form = document.getElementById('form');
@@ -114,6 +151,24 @@ const $cssOutput = document.getElementById('css-output');
 
 const TURNSTILE_ENABLED = <?= $turnstile ? 'true' : 'false' ?>;
 const FORM_BLOCKED = <?= ($turnstile || $issues !== []) ? 'true' : 'false' ?>;
+
+// Turnstile 没有"渲染完成"回调：以 iframe 被插入容器为就绪信号。
+// api.js 是 async 脚本，可能在观察器启动前就完成渲染，所以先立即检查一次。
+const $turnstileSlot = document.getElementById('turnstile-slot');
+if ($turnstileSlot) {
+    const host = $turnstileSlot.querySelector('.cf-turnstile');
+    if (host.querySelector('iframe')) {
+        $turnstileSlot.classList.add('is-ready');
+    } else {
+        const observer = new MutationObserver(() => {
+            if (host.querySelector('iframe')) {
+                $turnstileSlot.classList.add('is-ready');
+                observer.disconnect();
+            }
+        });
+        observer.observe(host, { childList: true, subtree: true });
+    }
+}
 
 $form.addEventListener('submit', async (event) => {
     event.preventDefault();
