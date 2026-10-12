@@ -44,6 +44,7 @@ function renderUi(): void
     button {
         margin-top: 20px; width: 100%; padding: 10px; font-size: 14px;
         color: #fff; background: #1f6feb; border: 0; border-radius: 8px; cursor: pointer;
+        transition: opacity .2s ease-out;
     }
     button:disabled { opacity: .6; cursor: default; }
     button.is-loading { position: relative; color: transparent; opacity: 1; }
@@ -120,6 +121,15 @@ const $cssOutput = document.getElementById('css-output');
 
 const TURNSTILE_ENABLED = <?= $turnstile ? 'true' : 'false' ?>;
 const FORM_BLOCKED = <?= ($turnstile || $issues !== []) ? 'true' : 'false' ?>;
+const REDUCED_MOTION = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// 一次性入场动画统一入口；reduced-motion 环境退化为纯淡入
+function animateIn(el, keyframes, duration) {
+    el.animate(REDUCED_MOTION ? [{ opacity: 0 }, { opacity: 1 }] : keyframes, {
+        duration,
+        easing: 'ease-out',
+    });
+}
 
 $form.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -181,6 +191,10 @@ async function loadCss(body) {
     }
     $cssOutput.textContent = await response.text();
     $cssOutput.style.display = 'block';
+    animateIn($cssOutput, [
+        { opacity: 0, transform: 'translateY(4px)' },
+        { opacity: 1, transform: 'none' },
+    ], 250);
 }
 
 async function showHttpError(response) {
@@ -190,6 +204,13 @@ async function showHttpError(response) {
         if (data && data.error) message = data.error;
     } catch (e) { /* 非 JSON 响应时保留状态码 */ }
     $message.textContent = message;
+    animateIn($message, [
+        { opacity: 0, transform: 'none' },
+        { opacity: 1, transform: 'none', offset: 0.3 },
+        { transform: 'translateX(3px)', offset: 0.5 },
+        { transform: 'translateX(-3px)', offset: 0.7 },
+        { transform: 'none' },
+    ], 300);
 }
 </script>
 </body>
