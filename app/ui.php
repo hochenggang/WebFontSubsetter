@@ -46,43 +46,24 @@ function renderUi(): void
         color: #fff; background: #1f6feb; border: 0; border-radius: 8px; cursor: pointer;
     }
     button:disabled { opacity: .6; cursor: default; }
+    button.is-loading { position: relative; color: transparent; opacity: 1; }
+    button.is-loading::after {
+        content: ''; position: absolute; top: 50%; left: 50%;
+        width: 18px; height: 18px; margin: -9px 0 0 -9px;
+        border: 2px solid #fff; border-top-color: transparent; border-radius: 50%;
+        animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
     .issues {
         margin-bottom: 20px; padding: 12px 14px; font-size: 13px; line-height: 1.7;
         background: #fff8c5; border: 1px solid #d4a72c33; border-radius: 8px; color: #7d4e00;
     }
-    .hint { margin-top: 6px; font-size: 12px; color: #8c959f; }
     #message { margin-top: 12px; font-size: 13px; color: #cf222e; min-height: 1em; }
     #css-output {
         display: none; margin-top: 20px; padding: 14px;
         background: #0d1117; color: #a5d6ff; border-radius: 8px;
         font: 12px/1.7 ui-monospace, Consolas, monospace;
         white-space: pre-wrap; word-break: break-all;
-    }
-    /* Turnstile 组件固定高 65px；骨架同高占位，渲染完成前不产生布局跳动 */
-    .turnstile-slot { position: relative; min-height: 65px; }
-    .turnstile-skeleton {
-        position: absolute; inset: 0; overflow: hidden; pointer-events: none;
-        background: #eaecf0; border-radius: 8px;
-        transition: opacity .2s ease-out, visibility .2s;
-    }
-    .turnstile-skeleton::after {
-        content: ''; position: absolute; inset: 0;
-        transform: translateX(-100%);
-        background: linear-gradient(90deg, transparent, rgba(255,255,255,.65), transparent);
-        animation: skeleton-sweep 1.5s linear infinite;
-    }
-    @keyframes skeleton-sweep { to { transform: translateX(100%); } }
-    .turnstile-slot.is-ready .turnstile-skeleton,
-    .turnstile-slot.is-failed .turnstile-skeleton { opacity: 0; visibility: hidden; }
-    .turnstile-fallback {
-        display: none; min-height: 65px;
-        align-items: center; justify-content: center;
-        border: 1px dashed #d0d7de; border-radius: 8px;
-        font-size: 13px; color: #8c959f;
-    }
-    .turnstile-slot.is-failed .turnstile-fallback { display: flex; }
-    @media (prefers-reduced-motion: reduce) {
-        .turnstile-skeleton::after { animation: none; }
     }
 </style>
 </head>
@@ -105,7 +86,6 @@ function renderUi(): void
             <option value="<?= htmlspecialchars($font, ENT_QUOTES) ?>"><?= htmlspecialchars($font, ENT_QUOTES) ?></option>
             <?php endforeach; ?>
         </select>
-        <div class="hint">扫描自 fonts/，支持最多 2 层子目录。</div>
 
         <label for="format">输出格式</label>
         <select id="format" name="format">
@@ -118,12 +98,8 @@ function renderUi(): void
 
         <?php if ($turnstile): ?>
         <label>真人验证</label>
-        <div class="turnstile-slot" id="turnstile-slot">
-            <div class="turnstile-skeleton" aria-hidden="true"></div>
-            <div class="cf-turnstile" data-sitekey="<?= htmlspecialchars(config()['cfTurnstileSiteKey'], ENT_QUOTES) ?>"
-                 data-size="flexible" data-callback="onTurnstileDone"></div>
-            <div class="turnstile-fallback">验证组件加载失败，请刷新页面后重试</div>
-        </div>
+        <div class="cf-turnstile" data-sitekey="<?= htmlspecialchars(config()['cfTurnstileSiteKey'], ENT_QUOTES) ?>"
+             data-size="flexible" data-callback="onTurnstileDone"></div>
         <?php endif; ?>
 
         <button id="submit" type="submit"<?= ($turnstile || $issues !== []) ? ' disabled' : '' ?>>获取字体</button>
@@ -133,15 +109,8 @@ function renderUi(): void
 </div>
 
 <?php if ($turnstile): ?>
-<script>
-window.onTurnstileDone = function () { document.getElementById('submit').disabled = false; };
-window.onTurnstileLoadError = function () {
-    const slot = document.getElementById('turnstile-slot');
-    if (slot) { slot.classList.add('is-failed'); }
-};
-</script>
-<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer
-        onerror="window.onTurnstileLoadError && window.onTurnstileLoadError();"></script>
+<script>window.onTurnstileDone = function () { document.getElementById('submit').disabled = false; };</script>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 <?php endif; ?>
 <script>
 const $form = document.getElementById('form');
@@ -152,28 +121,11 @@ const $cssOutput = document.getElementById('css-output');
 const TURNSTILE_ENABLED = <?= $turnstile ? 'true' : 'false' ?>;
 const FORM_BLOCKED = <?= ($turnstile || $issues !== []) ? 'true' : 'false' ?>;
 
-// Turnstile 没有"渲染完成"回调：以 iframe 被插入容器为就绪信号。
-// api.js 是 async 脚本，可能在观察器启动前就完成渲染，所以先立即检查一次。
-const $turnstileSlot = document.getElementById('turnstile-slot');
-if ($turnstileSlot) {
-    const host = $turnstileSlot.querySelector('.cf-turnstile');
-    if (host.querySelector('iframe')) {
-        $turnstileSlot.classList.add('is-ready');
-    } else {
-        const observer = new MutationObserver(() => {
-            if (host.querySelector('iframe')) {
-                $turnstileSlot.classList.add('is-ready');
-                observer.disconnect();
-            }
-        });
-        observer.observe(host, { childList: true, subtree: true });
-    }
-}
-
 $form.addEventListener('submit', async (event) => {
     event.preventDefault();
     $message.textContent = '';
     $button.disabled = true;
+    $button.classList.add('is-loading');
     try {
         const body = new URLSearchParams({
             font: document.getElementById('font').value,
@@ -183,6 +135,7 @@ $form.addEventListener('submit', async (event) => {
         appendTurnstileToken(body);
         await Promise.all([downloadFont(body), loadCss(body)]);
     } finally {
+        $button.classList.remove('is-loading');
         resetTurnstile();
     }
 });
